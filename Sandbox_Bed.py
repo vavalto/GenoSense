@@ -4,28 +4,21 @@ import os
 from functools import reduce
 import timeit
 
-#REP1 = 'iCellNeuron_HTTLOC_CAPCxHTT_REP1.bed';
-#REP2 = 'iCellNeuron_HTTLOC_CAPCxHTT_REP2.bed';
-#REP3 = 'iCellNeuron_HTTLOC_CAPCxHTT_REP3.bed';
 
-Ex1 = 'Example1.bed';
-Ex2 = 'Example2.bed';
-Ex3 = 'Example3.bed';
+def run_intersect(file_list, overlap_min=1, gap_min=0, multi_bed=2, multi_frag=3):
 
-# Example input list of files
-file_list = [];
-file_list.append(Ex1);
-file_list.append(Ex2);
-file_list.append(Ex3);
-#print(file_list)
-#file_list.append(REP3);
+    # File 1
+    BED_file_lines_1 = get_file_lines(abs_file_name=file_list[0])
+    BED_file_dict_1 = get_file_bed_dict(lines=BED_file_lines_1)
+    # File 2
+    BED_file_lines_2 = get_file_lines(abs_file_name=file_list[1])
+    BED_file_dict_2 = get_file_bed_dict(lines=BED_file_lines_2)
+    sect_bed = intersect_bed(BED_file_dict_1, BED_file_dict_2, overlap_min, gap_min)
+    return sect_bed
 
-
-def get_file_lines(file_directory=None, file_name=None):
-    abs_file = os.path.join(file_directory, file_name)
-    with open(abs_file,'r') as file:
+def get_file_lines(abs_file_name=None):
+    with open(abs_file_name,'r') as file:
         lines = file.readlines()
-        #print(lines)
     return lines
 
 
@@ -53,59 +46,106 @@ def get_file_bed_dict(lines=None):
             bed_dict.update({chromosome: range_tuple_list})
     return bed_dict
 
-def intersect_bed(bed_dict1, bed_dict2):
-    # TODO: Make sure on the same chromosome
+def intersect_bed(bed_dict1, bed_dict2, overlap_min, gap_min):
+    '''
+    Compares BED dictionaries given a overlap minnimum and gap minnimum
+
+    Input Arguments:
+        bed_dict1: dictionary of bed file created by get_file_bed_dict
+        bed_dict2: dictionary of bed file created by get_file_bed_dict
+
+    Output Arguments:
+        bed_dict:
+            {'chromosome:'
+                {'Unique ID for intersections':
+                    list(
+                            {'grand_parent': (start, end)}
+                            {'parent':       (start, end)}
+                            {'intersect':    (start, end)}
+                            {'length':       value}
+                        )
+                }
+            }
+    '''
+    # Intialize bed_dict
     bed_dict = {}
+    # Intialize unique intersect ID
+    intersect_loop = 0
     for chrom1, frag_range1 in bed_dict1.items():
-        for chrom2, frag_range2 in bed_dict2.items():
-            if chrom1 == chrom2:
-                for frag1 in frag_range1:
-                    for frag2 in frag_range2:
-                        range_tuple_list = []
-                        intersect = np.intersect1d(range(frag1[0], frag1[1]+1), range(frag2[0], frag2[1]+1))
-                        if intersect.any():
-                            range_tuple = (min(intersect), max(intersect))
-                            range_tuple_list.append(range_tuple)
-                            if chrom1 in bed_dict:
-                                bed_dict[chrom1].append(range_tuple)
-                            else:
-                                bed_dict.update({chrom1: range_tuple_list})
-    print('Intersect:')
-    print(bed_dict)
+        if chrom1 in bed_dict1:
+            frag_range2 = bed_dict2[chrom1]
+            # For each single interval fragment range
+            for frag1 in frag_range1:
+                # For each single interval fragment range
+                for frag2 in frag_range2:
+                    range_tuple_list = []
+                    min_frag1 = frag1[0] + gap_min
+                    min_frag2 = frag2[0] + gap_min
+                    max_frag1 = frag1[1] + gap_min + 1 # Adding one for inclusive intersection
+                    max_frag2 = frag2[1] + gap_min + 1 # Adding one for inclusive intersection
+                    # Find intersection of fragment intervals
+                    intersect = np.intersect1d(range(min_frag1, max_frag1), range(min_frag2, max_frag2))
+                    # If there is any intersections
+                    if intersect.any() and overlap_min >= 1:
+                        # Increment unique ID
+                        intersect_loop = intersect_loop + 1
+                        # Create intersection interval
+                        range_tuple = (min(intersect), max(intersect))
+                        # Find the length of the intersection
+                        len_intersect = len_intersect_limit(range_tuple, overlap_min)
+                        # Create "grandparent" fragment of intersection
+                        gp_dict = {'grand_parent': (frag2[0], frag2[1]+1)}
+                        # Create "parent" fragment of intersection
+                        parent_dict = {'parent': (frag1[0], frag1[1]+1)}
+                        intersect_dict = {'intersect': range_tuple}
+                        # Save length of interval
+                        length_dict = {'length': len_intersect}
+                        range_tuple_list.append(gp_dict)
+                        range_tuple_list.append(parent_dict)
+                        range_tuple_list.append(intersect_dict)
+                        range_tuple_list.append(length_dict)
+                        # If chromosone is already in the output
+                        if chrom1 in bed_dict:
+                            bed_dict[chrom1].update({intersect_loop: range_tuple_list})
+                        else:
+                            # Intialize output
+                            bed_dict.update({chrom1: {intersect_loop: range_tuple_list}})
     return bed_dict
 
-def len_intersect_limit(intersect_bed, overlap_min=100):
-    for chrom1, frag_intersect in intersect_bed.items():
-        for frag in frag_intersect:
-            len_sect = np.abs(np.subtract(frag[0], frag[1]))
-            if len_sect >= overlap_min:
-                print(len_sect)
+def len_intersect_limit(frag_intersect, overlap_min=100):
+    '''
+    If the length of the interval exists, else return zero
+
+    Input Arguments:
+        frag_intersect: fragment intersection
+
+    Output Arguments:
+        lenfth of intersection
+        boolean
+    '''
+    len_sect = np.abs(np.subtract(frag_intersect[0], frag_intersect[1]))
+    if len_sect >= overlap_min:
+        return len_sect
+    else:
+        return 0
 
 
-parent_dir = os.getcwd()
-BED_file_directory = os.path.join(parent_dir)
-#print(BED_file_directory)
+if __name__ == "__main__":
+    parent_dir = os.getcwd()
+    BED_file_directory = os.path.join(parent_dir)
 
-# File 1
-BED_file_lines_1 = get_file_lines(file_directory=BED_file_directory,
-                                  file_name=file_list[0])
+    Ex1 = os.path.join(BED_file_directory, 'Example1.bed');
+    Ex2 = os.path.join(BED_file_directory, 'Example2.bed');
+    Ex3 = os.path.join(BED_file_directory, 'Example3.bed');
 
-BED_file_dict_1 = get_file_bed_dict(lines=BED_file_lines_1)
-print(BED_file_dict_1)
+    REP1 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP1.bed')
+    REP2 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP2.bed')
 
-# File 2
-BED_file_lines_2 = get_file_lines(file_directory=BED_file_directory,
-                                  file_name=file_list[1])
+    # Example input list of files
+    file_list = [];
+    file_list.append(REP1);
+    file_list.append(REP2);
+    #file_list.append(Ex3);
 
-BED_file_dict_2 = get_file_bed_dict(lines=BED_file_lines_2)
-print(BED_file_dict_2)
-
-# File 3
-BED_file_lines_3 = get_file_lines(file_directory=BED_file_directory,
-                                  file_name=file_list[2])
-
-BED_file_dict_3 = get_file_bed_dict(lines=BED_file_lines_3)
-print(BED_file_dict_3)
-
-sect_bed = intersect_bed(BED_file_dict_1, BED_file_dict_2)
-len_intersect_limit(sect_bed, 50)
+    sect_bed = run_intersect(file_list, 50, 0, multi_bed=2, multi_frag=3)
+    print(sect_bed)
