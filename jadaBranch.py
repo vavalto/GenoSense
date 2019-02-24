@@ -6,7 +6,6 @@ import timeit
 
 
 def run_intersect(file_list, overlap_min=1, gap_min=0, multi_bed=2, multi_frag=3):
-
     # File 1
     BED_file_lines_1 = get_file_lines(abs_file_name=file_list[0])
     BED_file_dict_1 = get_file_bed_dict(lines=BED_file_lines_1)
@@ -15,6 +14,7 @@ def run_intersect(file_list, overlap_min=1, gap_min=0, multi_bed=2, multi_frag=3
     BED_file_dict_2 = get_file_bed_dict(lines=BED_file_lines_2)
     sect_bed = intersect_bed(BED_file_dict_1, BED_file_dict_2, overlap_min, gap_min)
     return sect_bed
+
 
 def get_file_lines(abs_file_name=None):
     with open(abs_file_name,'r') as file:
@@ -45,6 +45,7 @@ def get_file_bed_dict(lines=None):
         else:
             bed_dict.update({chromosome: range_tuple_list})
     return bed_dict
+
 
 def intersect_bed(bed_dict1, bed_dict2, overlap_min, gap_min):
     '''
@@ -112,6 +113,7 @@ def intersect_bed(bed_dict1, bed_dict2, overlap_min, gap_min):
                             bed_dict.update({chrom1: {intersect_loop: range_tuple_list}})
     return bed_dict
 
+
 def len_intersect_limit(frag_intersect, overlap_min=100):
     '''
     If the length of the interval exists, else return zero
@@ -130,22 +132,60 @@ def len_intersect_limit(frag_intersect, overlap_min=100):
         return 0
 
 
-if __name__ == "__main__":
-    parent_dir = os.getcwd()
-    BED_file_directory = os.path.join(parent_dir)
+parent_dir = os.getcwd()
+BED_file_directory = os.path.join(parent_dir)
 
-    Ex1 = os.path.join(BED_file_directory, 'Example1.bed');
-    Ex2 = os.path.join(BED_file_directory, 'Example2.bed');
-    Ex3 = os.path.join(BED_file_directory, 'Example3.bed');
+Ex1 = os.path.join(BED_file_directory, 'Example1.bed')
+Ex2 = os.path.join(BED_file_directory, 'Example2.bed')
+Ex3 = os.path.join(BED_file_directory, 'Example3.bed')
 
-    REP1 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP1.bed')
-    REP2 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP2.bed')
+REP1 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP1.bed')
+REP2 = os.path.join(BED_file_directory, 'iCellNeuron_HTTLOC_CAPCxHTT_REP2.bed')
 
-    # Example input list of files
-    file_list = [];
-    file_list.append(Ex1);
-    file_list.append(Ex1);
-    #file_list.append(Ex3);
+# Example input list of files
+file_list = []
+file_list.append(Ex1)
+file_list.append(Ex2)
+#file_list.append(Ex3)
 
-    sect_bed = run_intersect(file_list, 50, 0, multi_bed=2, multi_frag=3)
-    print(sect_bed)
+
+#sect_bed = run_intersect(file_list, 50, 0, multi_bed=2, multi_frag=3)
+#print(sect_bed)
+
+class Bed_File:
+    def __init__(self, filelist):
+        self.filelist = filelist
+        total_files_dict = {}
+        for single_files in filelist:
+            genome = Genome(single_files)
+            total_files_dict.update({single_files:genome})
+        self.total_files_dict = total_files_dict
+   
+class Genome:
+    def __init__(self, bed_dict):
+        self.bed_list = get_file_lines(bed_dict)
+        self.bed_dict = get_file_bed_dict(self.bed_list)
+
+class Chromosome:
+    def __init__(self, genome_dict):
+        self.chromo_num = chromo_num
+
+class Chromo_Range:
+    def __init__(self, overlap_min, gap_min, range_of_chromo=(), intersections={}):
+        self.overlap_min = overlap_min
+        self.gap_min = gap_min
+        self.range_of_chromo = range_of_chromo
+        self.intersections = intersections
+
+        start = range_of_chromo[0]
+        end = range_of_chromo[1]
+        
+        self.start = start
+        self.end = end
+
+
+
+
+test_class_Bed_File = Bed_File(file_list)
+
+print(test_class_Bed_File.total_files_dict)
