@@ -1,6 +1,8 @@
 from pybedtools import BedTool
 import numpy as np
 import os
+from functools import reduce
+import timeit
 
 #REP1 = 'iCellNeuron_HTTLOC_CAPCxHTT_REP1.bed';
 #REP2 = 'iCellNeuron_HTTLOC_CAPCxHTT_REP2.bed';
@@ -43,7 +45,7 @@ def get_file_bed_dict(lines=None):
         values = line.split()
         #print(values)
         chromosome = values[0]
-        range_tuple = [int(values[1]), int(values[2])]
+        range_tuple = (int(values[1]), int(values[2]))
         range_tuple_list.append(range_tuple)
         if chromosome in bed_dict:
             bed_dict[chromosome].append(range_tuple)
@@ -52,14 +54,33 @@ def get_file_bed_dict(lines=None):
     return bed_dict
 
 def intersect_bed(bed_dict1, bed_dict2):
+    # TODO: Make sure on the same chromosome
+    bed_dict = {}
     for chrom1, frag_range1 in bed_dict1.items():
         for chrom2, frag_range2 in bed_dict2.items():
-            for frag1 in frag_range1:
-                for frag2 in frag_range2:
-                    print(frag1)
-                    print(frag2)
-                    intersect = set(frag1).intersection(frag2)
-                    print(intersect)
+            if chrom1 == chrom2:
+                for frag1 in frag_range1:
+                    for frag2 in frag_range2:
+                        range_tuple_list = []
+                        intersect = np.intersect1d(range(frag1[0], frag1[1]+1), range(frag2[0], frag2[1]+1))
+                        if intersect.any():
+                            range_tuple = (min(intersect), max(intersect))
+                            range_tuple_list.append(range_tuple)
+                            if chrom1 in bed_dict:
+                                bed_dict[chrom1].append(range_tuple)
+                            else:
+                                bed_dict.update({chrom1: range_tuple_list})
+    print('Intersect:')
+    print(bed_dict)
+    return bed_dict
+
+def len_intersect_limit(intersect_bed, overlap_min=100):
+    for chrom1, frag_intersect in intersect_bed.items():
+        for frag in frag_intersect:
+            len_sect = np.abs(np.subtract(frag[0], frag[1]))
+            if len_sect >= overlap_min:
+                print(len_sect)
+
 
 parent_dir = os.getcwd()
 BED_file_directory = os.path.join(parent_dir)
@@ -86,34 +107,5 @@ BED_file_lines_3 = get_file_lines(file_directory=BED_file_directory,
 BED_file_dict_3 = get_file_bed_dict(lines=BED_file_lines_3)
 print(BED_file_dict_3)
 
-intersect_bed(BED_file_dict_1, BED_file_dict_2)
-
-
-# a = [[0, 2], [5, 10], [13, 23], [24, 25]]
-# b = [[1, 5], [8, 12], [15, 18], [20, 24]]
-#
-# def get_intersection(x, y):
-#     x_spread = [item for sublist in [list(range(l[0],l[1]+1)) for l in x] for item in sublist]
-#     y_spread = [item for sublist in [list(range(l[0],l[1]+1)) for l in y] for item in sublist]
-#     print(x_spread)
-#     print(y_spread)
-#     flat_intersect_list = list(set(x_spread).intersection(y_spread))
-#     print(flat_intersect_list)
-#
-# get_intersection(a, b)
-
-#def overlap_constrain(file_list, min_overlap==100, n==3, k==2)
-
-#sect_file = REP1.intersect(REP2)
-#print(sect_file)
-
-# Handling the n==# module
-#n = 2
-#num_of_files = range(0, len(file_list))
-#combo_files = pd.Series(list(it.combinations(np.unique(num_of_files),n)))
-#print(combo_files)
-
-# Handling the min_overlap
-#for item in sect_file:
-#    if abs(len(item)) >= 100:
-#        print(item.chrom, item.start, item.end, len(item))
+sect_bed = intersect_bed(BED_file_dict_1, BED_file_dict_2)
+len_intersect_limit(sect_bed, 50)
